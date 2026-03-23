@@ -337,6 +337,16 @@ sub ctj_email_check_header {
 
   # Hit if ANY extracted email address is invalid.
   for my $email (@emails) {
+    my $local_check = _analyze_email_local($email);
+    my $local_valid = $local_check->{valid};
+
+    # If the address fails local syntax validation, we should always flag it,
+    # regardless of whether the paid endpoint says otherwise.
+    if (!$local_valid) {
+      $cache->{$cache_key} = 1;
+      return 1;
+    }
+
     my $valid;
 
     if ($script_path && $script_path ne '') {
@@ -352,10 +362,10 @@ sub ctj_email_check_header {
       }
       elsif ($api_url && $api_url ne '') {
         my $api_valid = _analyze_email_via_api($api_url, $email, $timeout_seconds);
-        $valid = defined($api_valid) ? $api_valid : _analyze_email_local($email)->{valid};
+        $valid = defined($api_valid) ? $api_valid : 1;
       }
       else {
-        $valid = _analyze_email_local($email)->{valid};
+        $valid = 1;
       }
     }
     elsif ($api_url && $api_url ne '') {
@@ -365,11 +375,12 @@ sub ctj_email_check_header {
       }
       else {
         # API likely returned 402/503/timeout; fall back to local validation.
-        $valid = _analyze_email_local($email)->{valid};
+        $valid = 1;
       }
     }
     else {
-      $valid = _analyze_email_local($email)->{valid};
+      # Local validation already known to be valid.
+      $valid = 1;
     }
 
     if (!$valid) {
