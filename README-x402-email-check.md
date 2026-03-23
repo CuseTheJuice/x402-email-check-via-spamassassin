@@ -23,8 +23,10 @@ export BASE_WALLET_PRIVATE_KEY=0x...
 
 ## 2) Install Python deps
 
+The x402 Python SDK requires Python >= 3.10.
+
 ```bash
-python3 -m pip install -r spamassassin/requirements-x402-client.txt
+python3.10 -m pip install -r requirements-x402-client.txt
 ```
 
 ## 3) Place files for SpamAssassin
@@ -48,7 +50,7 @@ In your active SpamAssassin config:
 ```cf
 loadplugin Mail::SpamAssassin::Plugin::CTJEmailCheck /etc/mail/spamassassin/CTJEmailCheck.pm
 
-ctj_email_check_script_python_bin /usr/bin/python3
+ctj_email_check_script_python_bin /usr/bin/python3.10
 ctj_email_check_script_path /etc/mail/spamassassin/x402_email_check_client.py
 ctj_email_check_script_endpoint https://app.cusethejuice.com/api/bots/email-check
 ctj_email_check_timeout_seconds 2

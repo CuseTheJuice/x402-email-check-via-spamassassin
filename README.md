@@ -30,6 +30,7 @@ Repository: [CuseTheJuice/x402-email-check-via-spamassassin](https://github.com/
 
 - Linux host running SpamAssassin (`spamd`)
 - root/sudo access
+- Python >= 3.10 (required by the `x402` Python SDK)
 - Wallet private key for x402 payment available to the `spamd` runtime:
   - `EVM_PRIVATE_KEY=0x...` (preferred), or
   - `BASE_WALLET_PRIVATE_KEY=0x...`
@@ -47,7 +48,8 @@ curl -fsSL https://raw.githubusercontent.com/CuseTheJuice/x402-email-check-via-s
 
 This installer:
 
-- installs base dependencies (`git`, `spamassassin`, `python3`, `python3-pip`) when possible
+- installs base dependencies (`git`, `spamassassin`, build tools, Python) when possible
+- ensures Python 3.10+ is available for the `x402` client
 - clones this repo
 - installs plugin/client files into `/etc/mail/spamassassin`
 - installs Python requirements
@@ -63,7 +65,8 @@ Use env vars in front of the command:
 REPO_REF=main \
 SA_DIR=/etc/mail/spamassassin \
 SA_LOCAL_CF=/etc/mail/spamassassin/local.cf \
-PYTHON_BIN=/usr/bin/python3 \
+# Optional: override only if you already have Python 3.10+ installed
+# (example: /usr/bin/python3.10). If unset, the installer will try to find/install it.
 ENDPOINT_URL=https://app.cusethejuice.com/api/bots/email-check \
 TIMEOUT_SECONDS=2 \
 curl -fsSL https://raw.githubusercontent.com/CuseTheJuice/x402-email-check-via-spamassassin/main/install_spamassassin_x402.sh | sudo -E bash
@@ -106,7 +109,11 @@ If your service is named `spamassassin` instead of `spamd`, use that name.
 ```bash
 sudo apt-get update
 sudo apt-get install -y spamassassin python3 python3-pip
-python3 -m pip install -r requirements-x402-client.txt
+# x402 requires Python >= 3.10
+sudo apt-get install -y python3.10 python3.10-venv python3.10-dev || true
+python3.10 -m ensurepip --upgrade || true
+python3.10 -m pip install --upgrade pip
+python3.10 -m pip install -r requirements-x402-client.txt
 ```
 
 2. Copy files:

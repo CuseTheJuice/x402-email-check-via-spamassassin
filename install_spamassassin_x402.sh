@@ -11,7 +11,7 @@ set -euo pipefail
 #   INSTALL_DIR       Temporary working directory for checkout
 #   SA_DIR            SpamAssassin config directory (default: /etc/mail/spamassassin)
 #   SA_LOCAL_CF       Active local.cf path (default: /etc/mail/spamassassin/local.cf)
-#   PYTHON_BIN        Python binary path (default: /usr/bin/python3)
+#   PYTHON_BIN        Python binary path (default: /usr/bin/python3; must be >= Python 3.10)
 #   ENDPOINT_URL      API endpoint (default: https://app.cusethejuice.com/api/bots/email-check)
 #   TIMEOUT_SECONDS   Timeout for endpoint calls (default: 2)
 #
@@ -23,7 +23,11 @@ REPO_REF="${REPO_REF:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/tmp/x402-email-check-via-spamassassin}"
 SA_DIR="${SA_DIR:-/etc/mail/spamassassin}"
 SA_LOCAL_CF="${SA_LOCAL_CF:-${SA_DIR}/local.cf}"
-PYTHON_BIN="${PYTHON_BIN:-/usr/bin/python3}"
+PYTHON_BIN_DEFAULTED=0
+if [[ -z "${PYTHON_BIN:-}" ]]; then
+  PYTHON_BIN_DEFAULTED=1
+  PYTHON_BIN="/usr/bin/python3"
+fi
 ENDPOINT_URL="${ENDPOINT_URL:-https://app.cusethejuice.com/api/bots/email-check}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-2}"
 
@@ -93,6 +97,83 @@ install_base_dependencies() {
   esac
 }
 
+python_is_at_least_310() {
+  local py="$1"
+  [[ -x "$py" ]] || return 1
+  "$py" - <<'PY' >/dev/null 2>&1
+import sys
+sys.exit(0 if sys.version_info >= (3, 10) else 1)
+PY
+}
+
+maybe_select_new_python() {
+  # If PYTHON_BIN already satisfies the x402 requirement, keep it.
+  if python_is_at_least_310 "$PYTHON_BIN"; then
+    return 0
+  fi
+
+  # Otherwise, look for already-installed Python 3.10+ in PATH.
+  local candidates=(python3.12 python3.11 python3.10)
+  for c in "${candidates[@]}"; do
+    if command -v "$c" >/dev/null 2>&1; then
+      local py_path
+      py_path="$(command -v "$c")"
+      if python_is_at_least_310 "$py_path"; then
+        echo "Using detected Python: $py_path"
+        PYTHON_BIN="$py_path"
+        return 0
+      fi
+    fi
+  done
+
+  return 1
+}
+
+install_python_310_if_needed() {
+  if python_is_at_least_310 "$PYTHON_BIN"; then
+    return 0
+  fi
+
+  if [[ "$PYTHON_BIN_DEFAULTED" -ne 1 ]]; then
+    abort "x402 requires Python >= 3.10. Your PYTHON_BIN='${PYTHON_BIN}' is too old; set PYTHON_BIN=/usr/bin/python3.10 (or newer) and re-run."
+  fi
+
+  local pm
+  pm="$(detect_package_manager)"
+  case "$pm" in
+    apt)
+      echo "Installing Python 3.10+ (required by x402)..."
+      DEBIAN_FRONTEND=noninteractive apt-get update -y
+      DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common
+
+      # Try base repos first.
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        python3.10 \
+        python3.10-venv \
+        python3.10-dev || true
+
+      # If still missing, try deadsnakes.
+      if ! command -v python3.10 >/dev/null 2>&1; then
+        add-apt-repository -y ppa:deadsnakes/ppa
+        DEBIAN_FRONTEND=noninteractive apt-get update -y
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          python3.10 \
+          python3.10-venv \
+          python3.10-dev
+      fi
+
+      if command -v python3.10 >/dev/null 2>&1; then
+        PYTHON_BIN="$(command -v python3.10)"
+      fi
+      ;;
+    *)
+      abort "x402 requires Python >= 3.10, but this host doesn't look apt-based. Install Python 3.10+ manually and re-run with PYTHON_BIN=/path/to/python3.10."
+      ;;
+  esac
+
+  python_is_at_least_310 "$PYTHON_BIN" || abort "Python 3.10+ install failed; PYTHON_BIN='${PYTHON_BIN}' is still too old."
+}
+
 ensure_root() {
   if [[ "${EUID}" -ne 0 ]]; then
     abort "Run as root (or via sudo) so files can be installed to ${SA_DIR}"
@@ -160,10 +241,11 @@ restart_spamd_if_possible() {
 main() {
   ensure_root
   need_cmd git
-  need_cmd "${PYTHON_BIN##*/}" || true
 
   install_base_dependencies
   need_cmd git
+  maybe_select_new_python || true
+  install_python_310_if_needed
   need_cmd "$PYTHON_BIN"
   need_cmd spamassassin
 
@@ -185,6 +267,8 @@ main() {
   install -m 0644 "${INSTALL_DIR}/${PLUGIN_CF}" "${SA_DIR}/${PLUGIN_CF}"
   install -m 0755 "${INSTALL_DIR}/${CLIENT_PY}" "${SA_DIR}/${CLIENT_PY}"
 
+  # Ensure pip exists for the selected Python.
+  "$PYTHON_BIN" -m ensurepip --upgrade || true
   "$PYTHON_BIN" -m pip install --upgrade pip
   "$PYTHON_BIN" -m pip install -r "${INSTALL_DIR}/${REQ_TXT}"
 
