@@ -244,13 +244,34 @@ sub _analyze_email_via_script {
   # we must ensure command arguments derived from message content (like $email)
   # are untainted, otherwise -T warns about "Insecure dependency in piped open".
   #
-  # The $email values come from _extract_email_addresses(), so validate using the
-  # same-ish character profile to safely untaint.
+  # Since taint-mode might still consider config-derived values tainted, we
+  # untaint *all* arguments we pass to the external command using strict
+  # regex captures.
+
+  # Python binary & script path: absolute paths and safe characters.
+  my ($untainted_python_bin) =
+    ($python_bin =~ m{^(\/[\w\.\-\/]+)$}) ? $1 : ();
+  my ($untainted_resolved) =
+    ($resolved =~ m{^(\/[\w\.\-\/]+)$}) ? $1 : ();
+  return undef if !$untainted_python_bin || !$untainted_resolved;
+
+  # Endpoint URL: allow standard http(s) URL characters.
+  my ($untainted_endpoint) =
+    ($endpoint =~ m{^(https?://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+)$}) ? $1 : ();
+  return undef if !$untainted_endpoint;
+
+  # Timeout: numeric (integer or decimal).
+  my ($untainted_timeout) =
+    ($timeout_seconds =~ m{^(\d+(?:\.\d+)?)$}) ? $1 : ();
+  return undef if !$untainted_timeout;
+
+  # The $email values come from _extract_email_addresses(); validate using a
+  # compatible profile to safely untaint.
   my $LOCAL_PART_RE = qr/[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+/;
   my $DOMAIN_RE =
     qr/[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+/;
 
-  my $untainted_email;
+  my ($untainted_email) = ();
   if (defined $email && $email =~ /^($LOCAL_PART_RE\@$DOMAIN_RE)$/) {
     $untainted_email = $1; # captured group is untainted
   }
@@ -259,11 +280,11 @@ sub _analyze_email_via_script {
   }
 
   my @cmd = (
-    $python_bin,
-    $resolved,
+    $untainted_python_bin,
+    $untainted_resolved,
     '--email', $untainted_email,
-    '--endpoint', $endpoint,
-    '--timeout', $timeout_seconds,
+    '--endpoint', $untainted_endpoint,
+    '--timeout', $untainted_timeout,
   );
 
   my $output = '';
