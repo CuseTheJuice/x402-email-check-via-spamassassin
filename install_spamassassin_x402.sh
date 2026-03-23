@@ -112,6 +112,15 @@ maybe_select_new_python() {
     return 0
   fi
 
+  # First, check common absolute locations (in case PATH is minimal).
+  for py in /usr/bin/python3.10 /usr/local/bin/python3.10; do
+    if python_is_at_least_310 "$py"; then
+      PYTHON_BIN="$py"
+      echo "Using detected Python: $py"
+      return 0
+    fi
+  done
+
   # Otherwise, look for already-installed Python 3.10+ in PATH.
   local candidates=(python3.12 python3.11 python3.10)
   for c in "${candidates[@]}"; do
@@ -168,7 +177,18 @@ install_python_310_if_needed() {
         DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-dev || true
       fi
 
-      if command -v python3.10 >/dev/null 2>&1; then
+      # Prefer absolute locations if they exist.
+      for py in /usr/bin/python3.10 /usr/local/bin/python3.10; do
+        if python_is_at_least_310 "$py"; then
+          PYTHON_BIN="$py"
+          break
+        fi
+      done
+
+      # Otherwise, fall back to PATH lookup.
+      if python_is_at_least_310 "$PYTHON_BIN"; then
+        : # already set correctly above
+      elif command -v python3.10 >/dev/null 2>&1; then
         PYTHON_BIN="$(command -v python3.10)"
       fi
       ;;
