@@ -15,7 +15,13 @@
 #
 # Example:
 #   loadplugin Mail::SpamAssassin::Plugin::CTJEmailCheck /etc/mail/spamassassin/CTJEmailCheck.pm
-loadplugin Mail::SpamAssassin::Plugin::CTJEmailCheck /path/to/CTJEmailCheck.pm
+# NOTE:
+# This file is a template. It is intentionally DISABLED by default because many
+# SpamAssassin installs auto-include `/etc/mail/spamassassin/*.cf` and would
+# fail lint if the placeholder paths were active.
+#
+# To enable manually, uncomment and set a real path AND add the related rules.
+# loadplugin Mail::SpamAssassin::Plugin::CTJEmailCheck /etc/mail/spamassassin/CTJEmailCheck.pm
 
 # Optional: try calling the API (if reachable from spamd)
 # ctj_email_check_api_url https://app.cusethejuice.com/api/bots/email-check
@@ -25,17 +31,17 @@ loadplugin Mail::SpamAssassin::Plugin::CTJEmailCheck /path/to/CTJEmailCheck.pm
 # ctj_email_check_script_path /etc/mail/spamassassin/x402_email_check_client.py
 # ctj_email_check_script_endpoint https://app.cusethejuice.com/api/bots/email-check
 
-ctj_email_check_timeout_seconds 2
+# ctj_email_check_timeout_seconds 2
 
 # Rule: hit when an invalid email address is found in the specified header.
 #
 # These rules look at the first set of email-like tokens extracted from the header
 # and validate their basic RFC-5322-ish format (ASCII subset).
-header CTJ_EMAIL_CHECK_FROM eval:ctj_email_check_header('From')
-score CTJ_EMAIL_CHECK_FROM 2.5
-describe CTJ_EMAIL_CHECK_FROM Invalid email syntax detected in From header
+# header CTJ_EMAIL_CHECK_FROM eval:ctj_email_check_header('From')
+# score CTJ_EMAIL_CHECK_FROM 2.5
+# describe CTJ_EMAIL_CHECK_FROM Invalid email syntax detected in From header
 
-header CTJ_EMAIL_CHECK_REPLYTO eval:ctj_email_check_header('Reply-To')
-score CTJ_EMAIL_CHECK_REPLYTO 1.5
-describe CTJ_EMAIL_CHECK_REPLYTO Invalid email syntax detected in Reply-To header
+# header CTJ_EMAIL_CHECK_REPLYTO eval:ctj_email_check_header('Reply-To')
+# score CTJ_EMAIL_CHECK_REPLYTO 1.5
+# describe CTJ_EMAIL_CHECK_REPLYTO Invalid email syntax detected in Reply-To header
 
