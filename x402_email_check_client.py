@@ -177,18 +177,18 @@ def main() -> int:
                 try:
                     payment_required, header_src = _parse_payment_required_headers(response)
                     payment_required = _massage_payment_required_for_sdk(payment_required)
-                    payment_payload = client.create_payment_payload(payment_required)  # type: ignore[attr-defined]
-                    x_payment = _extract_x_payment_value(payment_payload)
-                    if not x_payment:
-                        return _emit(
-                            {
-                                "ok": False,
-                                "valid": None,
-                                "http_status": 402,
-                                "error": f"Could not extract X-PAYMENT value from x402 payload (source={header_src})",
-                            },
-                            1,
-                        )
+
+                    # Convert dict -> x402 PaymentRequired model (SDK expects .x402_version attr).
+                    from x402 import parse_payment_required  # type: ignore
+
+                    payment_required_obj = parse_payment_required(payment_required)
+
+                    payment_payload_obj = client.create_payment_payload(payment_required_obj)  # type: ignore[attr-defined]
+
+                    # Per x402 spec v1: X-PAYMENT is base64(JSON(payment payload)).
+                    payload_dict = payment_payload_obj.model_dump(by_alias=True, exclude_none=True)  # type: ignore[attr-defined]
+                    payload_json = json.dumps(payload_dict, separators=(",", ":"))
+                    x_payment = base64.b64encode(payload_json.encode("utf-8")).decode("ascii")
 
                     response = session.get(
                         url,
