@@ -76,29 +76,23 @@ curl -fsSL https://raw.githubusercontent.com/CuseTheJuice/x402-email-check-via-s
 
 ## Post-install required step (important)
 
-Make sure your spam daemon process sees the wallet private key.
+Make sure your SpamAssassin daemon process sees the wallet private key.
 
-Example systemd override for `spamd`:
+The installer tries to write it into your service's systemd `EnvironmentFile` (commonly `/etc/default/spamassassin`) if the key is not already present.
 
-```bash
-sudo systemctl edit spamd
-```
-
-Then add:
-
-```ini
-[Service]
-Environment="EVM_PRIVATE_KEY=0xYOUR_PRIVATE_KEY"
-```
-
-Apply:
+If you ran the installer via `curl -fsSL ... | sudo bash` and it could not prompt (non-interactive), you must provide it ahead of time:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl restart spamd
+export BASE_WALLET_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+curl -fsSL https://raw.githubusercontent.com/CuseTheJuice/x402-email-check-via-spamassassin/main/install_spamassassin_x402.sh | sudo -E bash
 ```
 
-If your service is named `spamassassin` instead of `spamd`, use that name.
+To verify, check:
+
+```bash
+sudo rg -n "EVM_PRIVATE_KEY=|BASE_WALLET_PRIVATE_KEY=" /etc/default/spamassassin || true
+sudo systemctl restart spamassassin || sudo systemctl restart spamd || true
+```
 
 ---
 
@@ -128,7 +122,7 @@ sudo install -m 0755 x402_email_check_client.py /etc/mail/spamassassin/x402_emai
 
 ```cf
 loadplugin Mail::SpamAssassin::Plugin::CTJEmailCheck /etc/mail/spamassassin/CTJEmailCheck.pm
-ctj_email_check_script_python_bin /usr/bin/python3
+ctj_email_check_script_python_bin /usr/bin/python3.10
 ctj_email_check_script_path /etc/mail/spamassassin/x402_email_check_client.py
 ctj_email_check_script_endpoint https://app.cusethejuice.com/api/bots/email-check
 ctj_email_check_timeout_seconds 2

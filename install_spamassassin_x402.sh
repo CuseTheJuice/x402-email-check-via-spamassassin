@@ -45,6 +45,45 @@ need_cmd() {
   command -v "$1" >/dev/null 2>&1 || abort "Missing required command: $1"
 }
 
+normalize_envfile_from_systemd() {
+  # Usage: normalize_envfile_from_systemd <unit-name>
+  # Tries to extract EnvironmentFile paths from systemd unit contents.
+  local unit="$1"
+  systemctl cat "$unit" 2>/dev/null \
+    | awk -F= '/EnvironmentFile=/{print $2}' \
+    | head -n 1 \
+    | sed -e 's/^-//' -e 's/[[:space:]]//g'
+}
+
+get_spamassassin_envfile() {
+  # Return the env file path used by the service, if we can detect it.
+  if systemctl list-unit-files 2>/dev/null | grep -q '^spamassassin\.service'; then
+    local f
+    f="$(normalize_envfile_from_systemd spamassassin.service)"
+    if [[ -n "$f" ]]; then
+      echo "$f"
+      return 0
+    fi
+  fi
+
+  if systemctl list-unit-files 2>/dev/null | grep -q '^spamd\.service'; then
+    local f
+    f="$(normalize_envfile_from_systemd spamd.service)"
+    if [[ -n "$f" ]]; then
+      echo "$f"
+      return 0
+    fi
+  fi
+
+  # Common default for Debian/Ubuntu SpamAssassin installs.
+  if [[ -f "/etc/default/spamassassin" ]]; then
+    echo "/etc/default/spamassassin"
+    return 0
+  fi
+
+  return 1
+}
+
 detect_package_manager() {
   if command -v apt-get >/dev/null 2>&1; then
     echo "apt"
@@ -260,6 +299,65 @@ ensure_root() {
   fi
 }
 
+ensure_wallet_key_configured() {
+  # Ensure spamd/spamassassin process can access the wallet key.
+  # - If /etc/default/spamassassin (or unit's EnvironmentFile) already has a key, do nothing.
+  # - Otherwise:
+  #   - in non-interactive mode: require BASE_WALLET_PRIVATE_KEY or EVM_PRIVATE_KEY env var
+  #   - in interactive mode: prompt for BASE_WALLET_PRIVATE_KEY (hidden)
+  #
+  # The key is appended as:
+  #   BASE_WALLET_PRIVATE_KEY=0x...
+
+  local envfile
+  if ! envfile="$(get_spamassassin_envfile)"; then
+    echo "WARNING: Could not detect SpamAssassin EnvironmentFile; skipping wallet env write." >&2
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$envfile")"
+  touch "$envfile"
+
+  if grep -Eq '^(EVM_PRIVATE_KEY|BASE_WALLET_PRIVATE_KEY)=' "$envfile"; then
+    echo "Wallet key already configured in $envfile"
+    return 0
+  fi
+
+  local key="${BASE_WALLET_PRIVATE_KEY:-}"
+  if [[ -z "$key" && -n "${EVM_PRIVATE_KEY:-}" ]]; then
+    # If caller provided EVM_PRIVATE_KEY but not BASE_WALLET_PRIVATE_KEY, prefer using it.
+    key="${EVM_PRIVATE_KEY}"
+    echo "Using EVM_PRIVATE_KEY from environment for wallet key."
+    # We'll set BASE_WALLET_PRIVATE_KEY anyway unless we want to preserve the variable name.
+    # The client accepts both; setting BASE_WALLET_PRIVATE_KEY keeps config consistent.
+  fi
+
+  if [[ -z "$key" ]]; then
+    if [[ -t 0 ]]; then
+      echo "Wallet key not found in $envfile."
+      read -r -s -p "Enter BASE_WALLET_PRIVATE_KEY (hidden, required for x402 payment): " key
+      echo ""
+    else
+      abort "Wallet key not configured and installer is non-interactive. Set BASE_WALLET_PRIVATE_KEY (or EVM_PRIVATE_KEY) and re-run."
+    fi
+  fi
+
+  [[ -n "$key" ]] || abort "Wallet key was empty; aborting."
+
+  # Append with restrictive permissions. Do not echo the secret.
+  {
+    echo ""
+    echo "# x402 wallet key used by SpamAssassin CTJEmailCheck plugin"
+    if [[ -n "${BASE_WALLET_PRIVATE_KEY:-}" ]]; then
+      echo "BASE_WALLET_PRIVATE_KEY=${key}"
+    else
+      echo "BASE_WALLET_PRIVATE_KEY=${key}"
+    fi
+  } >>"$envfile"
+
+  chmod 0640 "$envfile" || true
+}
+
 backup_file_if_exists() {
   local path="$1"
   if [[ -f "$path" ]]; then
@@ -353,6 +451,8 @@ main() {
   "$PYTHON_BIN" -m pip install -r "${INSTALL_DIR}/${REQ_TXT}"
 
   append_local_cf_if_missing
+
+  ensure_wallet_key_configured
 
   echo "Running SpamAssassin lint..."
   spamassassin --lint
