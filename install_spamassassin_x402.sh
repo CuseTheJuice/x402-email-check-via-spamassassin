@@ -408,7 +408,7 @@ header CTJ_EMAIL_CHECK_FROM_FAIL eval:ctj_email_check_header('From')
 score CTJ_EMAIL_CHECK_FROM_FAIL 0.1
 describe CTJ_EMAIL_CHECK_FROM_FAIL Invalid email syntax detected in From header
 
-header CTJ_EMAIL_CHECK_FROM_OK eval:ctj_email_check_header('From') == 0
+header CTJ_EMAIL_CHECK_FROM_OK eval:ctj_email_check_header_ok('From')
 score CTJ_EMAIL_CHECK_FROM_OK -0.1
 describe CTJ_EMAIL_CHECK_FROM_OK Valid email syntax detected in From header
 
@@ -416,7 +416,7 @@ header CTJ_EMAIL_CHECK_REPLYTO_FAIL eval:ctj_email_check_header('Reply-To')
 score CTJ_EMAIL_CHECK_REPLYTO_FAIL 0.1
 describe CTJ_EMAIL_CHECK_REPLYTO_FAIL Invalid email syntax detected in Reply-To header
 
-header CTJ_EMAIL_CHECK_REPLYTO_OK eval:ctj_email_check_header('Reply-To') == 0
+header CTJ_EMAIL_CHECK_REPLYTO_OK eval:ctj_email_check_header_ok('Reply-To')
 score CTJ_EMAIL_CHECK_REPLYTO_OK -0.1
 describe CTJ_EMAIL_CHECK_REPLYTO_OK Valid email syntax detected in Reply-To header
 ${marker_end}

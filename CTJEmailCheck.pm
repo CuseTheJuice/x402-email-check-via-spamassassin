@@ -26,6 +26,13 @@ sub new {
     $Mail::SpamAssassin::Conf::TYPE_HEAD_EVALS
   );
 
+  # A companion eval rule that returns 1 when ctj_email_check_header(...) is false (valid).
+  # This lets us express "OK" in SpamAssassin config without needing unsupported eval operators.
+  $self->register_eval_rule(
+    'ctj_email_check_header_ok',
+    $Mail::SpamAssassin::Conf::TYPE_HEAD_EVALS
+  );
+
   return $self;
 }
 
@@ -391,6 +398,14 @@ sub ctj_email_check_header {
 
   $cache->{$cache_key} = 0;
   return 0;
+}
+
+sub ctj_email_check_header_ok {
+  my ($self, $permsgstatus, @args) = @_;
+
+  # ctj_email_check_header returns 1 when invalid, 0 when valid.
+  my $invalid = $self->ctj_email_check_header($permsgstatus, @args);
+  return $invalid ? 0 : 1;
 }
 
 1;
