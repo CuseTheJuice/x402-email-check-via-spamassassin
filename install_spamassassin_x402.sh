@@ -375,8 +375,14 @@ append_local_cf_if_missing() {
   touch "$SA_LOCAL_CF"
 
   if grep -q "${marker_begin}" "$SA_LOCAL_CF"; then
-    echo "CTJ config block already present in ${SA_LOCAL_CF}; skipping append."
-    return
+    echo "CTJ config block already present in ${SA_LOCAL_CF}; ensuring scores are set to 1."
+    # Make rule scoring deterministic even if block already exists.
+    # (Valid => rule doesn't hit => adds 0 points.)
+    sed -i \
+      -e 's/^score CTJ_EMAIL_CHECK_FROM .*/score CTJ_EMAIL_CHECK_FROM 1/' \
+      -e 's/^score CTJ_EMAIL_CHECK_REPLYTO .*/score CTJ_EMAIL_CHECK_REPLYTO 1/' \
+      "$SA_LOCAL_CF" || true
+    return 0
   fi
 
   cat >>"$SA_LOCAL_CF" <<EOF
@@ -389,11 +395,11 @@ ctj_email_check_script_endpoint ${ENDPOINT_URL}
 ctj_email_check_timeout_seconds ${TIMEOUT_SECONDS}
 
 header CTJ_EMAIL_CHECK_FROM eval:ctj_email_check_header('From')
-score CTJ_EMAIL_CHECK_FROM 2.5
+score CTJ_EMAIL_CHECK_FROM 1
 describe CTJ_EMAIL_CHECK_FROM Invalid email syntax detected in From header
 
 header CTJ_EMAIL_CHECK_REPLYTO eval:ctj_email_check_header('Reply-To')
-score CTJ_EMAIL_CHECK_REPLYTO 1.5
+score CTJ_EMAIL_CHECK_REPLYTO 1
 describe CTJ_EMAIL_CHECK_REPLYTO Invalid email syntax detected in Reply-To header
 ${marker_end}
 EOF

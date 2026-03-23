@@ -38,10 +38,10 @@
 # These rules look at the first set of email-like tokens extracted from the header
 # and validate their basic RFC-5322-ish format (ASCII subset).
 # header CTJ_EMAIL_CHECK_FROM eval:ctj_email_check_header('From')
-# score CTJ_EMAIL_CHECK_FROM 2.5
+# score CTJ_EMAIL_CHECK_FROM 1
 # describe CTJ_EMAIL_CHECK_FROM Invalid email syntax detected in From header
 
 # header CTJ_EMAIL_CHECK_REPLYTO eval:ctj_email_check_header('Reply-To')
-# score CTJ_EMAIL_CHECK_REPLYTO 1.5
+# score CTJ_EMAIL_CHECK_REPLYTO 1
 # describe CTJ_EMAIL_CHECK_REPLYTO Invalid email syntax detected in Reply-To header
 
