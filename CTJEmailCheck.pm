@@ -240,10 +240,28 @@ sub _analyze_email_via_script {
   $endpoint = 'https://app.cusethejuice.com/api/bots/email-check' if !$endpoint || $endpoint eq '';
   $timeout_seconds = ($timeout_seconds && $timeout_seconds > 0) ? $timeout_seconds : 2;
 
+  # SpamAssassin runs with Perl taint mode (-T). When we spawn an external process,
+  # we must ensure command arguments derived from message content (like $email)
+  # are untainted, otherwise -T warns about "Insecure dependency in piped open".
+  #
+  # The $email values come from _extract_email_addresses(), so validate using the
+  # same-ish character profile to safely untaint.
+  my $LOCAL_PART_RE = qr/[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+/;
+  my $DOMAIN_RE =
+    qr/[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+/;
+
+  my $untainted_email;
+  if (defined $email && $email =~ /^($LOCAL_PART_RE\@$DOMAIN_RE)$/) {
+    $untainted_email = $1; # captured group is untainted
+  }
+  else {
+    return undef;
+  }
+
   my @cmd = (
     $python_bin,
     $resolved,
-    '--email', $email,
+    '--email', $untainted_email,
     '--endpoint', $endpoint,
     '--timeout', $timeout_seconds,
   );
