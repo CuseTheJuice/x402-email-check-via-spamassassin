@@ -374,16 +374,16 @@ append_local_cf_if_missing() {
   mkdir -p "$(dirname "$SA_LOCAL_CF")"
   touch "$SA_LOCAL_CF"
 
-  if grep -q "${marker_begin}" "$SA_LOCAL_CF"; then
-    echo "CTJ config block already present in ${SA_LOCAL_CF}; ensuring scores are set to 1."
-    # Make rule scoring deterministic even if block already exists.
-    # (Valid => rule doesn't hit => adds 0 points.)
-    sed -i \
-      -e 's/^score CTJ_EMAIL_CHECK_FROM .*/score CTJ_EMAIL_CHECK_FROM 1/' \
-      -e 's/^score CTJ_EMAIL_CHECK_REPLYTO .*/score CTJ_EMAIL_CHECK_REPLYTO 1/' \
-      "$SA_LOCAL_CF" || true
-    return 0
-  fi
+  # Re-write the entire CTJ block to keep scoring rules consistent across upgrades.
+  # We replace everything between the BEGIN/END markers.
+  local tmpfile
+  tmpfile="$(mktemp)"
+  awk -v b="$marker_begin" -v e="$marker_end" '
+    $0 ~ b {skip=1; next}
+    $0 ~ e {skip=0; next}
+    !skip {print}
+  ' "$SA_LOCAL_CF" >"$tmpfile"
+  mv "$tmpfile" "$SA_LOCAL_CF"
 
   cat >>"$SA_LOCAL_CF" <<EOF
 
@@ -394,13 +394,31 @@ ctj_email_check_script_path ${SA_DIR}/${CLIENT_PY}
 ctj_email_check_script_endpoint ${ENDPOINT_URL}
 ctj_email_check_timeout_seconds ${TIMEOUT_SECONDS}
 
-header CTJ_EMAIL_CHECK_FROM eval:ctj_email_check_header('From')
-score CTJ_EMAIL_CHECK_FROM 1
-describe CTJ_EMAIL_CHECK_FROM Invalid email syntax detected in From header
+# Always report a CTJ test in SpamAssassin headers:
+# - FAIL rule hits when ctj_email_check_header(...) is true (invalid)
+# - OK rule hits when it is false (valid)
+# Scores:
+# - invalid: +0.1
+# - valid:   -0.1
+#
+# Note: Reply-To may be missing; in that case ctj_email_check_header(...) returns 0
+# and the OK rule will hit (so you still get a CTJ test entry).
 
-header CTJ_EMAIL_CHECK_REPLYTO eval:ctj_email_check_header('Reply-To')
-score CTJ_EMAIL_CHECK_REPLYTO 1
-describe CTJ_EMAIL_CHECK_REPLYTO Invalid email syntax detected in Reply-To header
+header CTJ_EMAIL_CHECK_FROM_FAIL eval:ctj_email_check_header('From')
+score CTJ_EMAIL_CHECK_FROM_FAIL 0.1
+describe CTJ_EMAIL_CHECK_FROM_FAIL Invalid email syntax detected in From header
+
+header CTJ_EMAIL_CHECK_FROM_OK eval:!ctj_email_check_header('From')
+score CTJ_EMAIL_CHECK_FROM_OK -0.1
+describe CTJ_EMAIL_CHECK_FROM_OK Valid email syntax detected in From header
+
+header CTJ_EMAIL_CHECK_REPLYTO_FAIL eval:ctj_email_check_header('Reply-To')
+score CTJ_EMAIL_CHECK_REPLYTO_FAIL 0.1
+describe CTJ_EMAIL_CHECK_REPLYTO_FAIL Invalid email syntax detected in Reply-To header
+
+header CTJ_EMAIL_CHECK_REPLYTO_OK eval:!ctj_email_check_header('Reply-To')
+score CTJ_EMAIL_CHECK_REPLYTO_OK -0.1
+describe CTJ_EMAIL_CHECK_REPLYTO_OK Valid email syntax detected in Reply-To header
 ${marker_end}
 EOF
 }
