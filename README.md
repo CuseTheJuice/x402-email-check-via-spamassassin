@@ -34,7 +34,7 @@ Repository: [CuseTheJuice/x402-email-check-via-spamassassin](https://github.com/
 - Wallet private key for x402 payment available to the `spamd` runtime:
   - `EVM_PRIVATE_KEY=0x...` (preferred), or
   - `BASE_WALLET_PRIVATE_KEY=0x...`
-- Wallet has Base ETH (gas) and Base USDC (payment)
+- Wallet has Base native gas and Base USDC (payment)
 
 ---
 
