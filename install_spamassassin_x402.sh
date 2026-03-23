@@ -147,8 +147,10 @@ install_python_310_if_needed() {
       DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common
 
       # Try base repos first.
-      DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        python3.10 || true
+      # On some Ubuntu/Debian setups, the actual interpreter binary is provided by
+      # `python3.10-minimal`, while `python3.10` may be a meta-package.
+      DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-minimal || true
+      DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10 || true
 
       # Optional extras; not required for this installer flow.
       DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-venv || true
@@ -158,8 +160,8 @@ install_python_310_if_needed() {
       if ! command -v python3.10 >/dev/null 2>&1; then
         add-apt-repository -y ppa:deadsnakes/ppa
         DEBIAN_FRONTEND=noninteractive apt-get update -y
-        DEBIAN_FRONTEND=noninteractive apt-get install -y \
-          python3.10
+        DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-minimal || true
+        DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10 || true
 
         # Optional extras; best effort only.
         DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-venv || true
