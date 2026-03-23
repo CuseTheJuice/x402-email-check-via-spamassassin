@@ -148,18 +148,22 @@ install_python_310_if_needed() {
 
       # Try base repos first.
       DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        python3.10 \
-        python3.10-venv \
-        python3.10-dev || true
+        python3.10 || true
+
+      # Optional extras; not required for this installer flow.
+      DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-venv || true
+      DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-dev || true
 
       # If still missing, try deadsnakes.
       if ! command -v python3.10 >/dev/null 2>&1; then
         add-apt-repository -y ppa:deadsnakes/ppa
         DEBIAN_FRONTEND=noninteractive apt-get update -y
         DEBIAN_FRONTEND=noninteractive apt-get install -y \
-          python3.10 \
-          python3.10-venv \
-          python3.10-dev
+          python3.10
+
+        # Optional extras; best effort only.
+        DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-venv || true
+        DEBIAN_FRONTEND=noninteractive apt-get install -y python3.10-dev || true
       fi
 
       if command -v python3.10 >/dev/null 2>&1; then
