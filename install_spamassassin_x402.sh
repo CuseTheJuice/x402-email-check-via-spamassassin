@@ -147,6 +147,55 @@ install_python_310_if_needed() {
     abort "x402 requires Python >= 3.10. Your PYTHON_BIN='${PYTHON_BIN}' is too old; set PYTHON_BIN=/usr/bin/python3.10 (or newer) and re-run."
   fi
 
+  build_python_310_from_source() {
+    local version="3.10.12"
+    local prefix="/usr/local"
+    local workdir="/tmp/build-python-${version}"
+    local tarball="Python-${version}.tgz"
+    local url="https://www.python.org/ftp/python/${version}/${tarball}"
+
+    echo "Building Python ${version} from source (fallback for hosts without apt python3.10)..."
+
+    apt-get update -y
+    apt-get install -y --no-install-recommends \
+      build-essential \
+      curl ca-certificates \
+      wget \
+      libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
+      libsqlite3-dev libffi-dev liblzma-dev \
+      libncursesw5-dev tk-dev uuid-dev
+
+    rm -rf "$workdir"
+    mkdir -p "$workdir"
+    cd "$workdir"
+
+    if command -v curl >/dev/null 2>&1; then
+      curl -fsSL "$url" -o "$tarball"
+    elif command -v wget >/dev/null 2>&1; then
+      wget -q "$url" -O "$tarball"
+    else
+      abort "Need curl or wget to download Python source."
+    fi
+
+    tar -xzf "$tarball"
+    cd "Python-${version}"
+
+    # altinstall avoids clobbering the system default `python3` binary.
+    ./configure --prefix="$prefix" --enable-optimizations --with-ensurepip=install
+    make -j"$(nproc)"
+    make altinstall || make install
+
+    # Prefer altinstall-provided binary.
+    for py in /usr/local/bin/python3.10 /usr/bin/python3.10; do
+      if python_is_at_least_310 "$py"; then
+        PYTHON_BIN="$py"
+        return 0
+      fi
+    done
+
+    return 1
+  }
+
   local pm
   pm="$(detect_package_manager)"
   case "$pm" in
@@ -197,7 +246,12 @@ install_python_310_if_needed() {
       ;;
   esac
 
-  python_is_at_least_310 "$PYTHON_BIN" || abort "Python 3.10+ install failed; PYTHON_BIN='${PYTHON_BIN}' is still too old."
+  if python_is_at_least_310 "$PYTHON_BIN"; then
+    return 0
+  fi
+
+  # Final fallback: build Python from source (only when PYTHON_BIN was defaulted).
+  build_python_310_from_source || abort "Python 3.10+ install failed even after source-build; PYTHON_BIN='${PYTHON_BIN}'."
 }
 
 ensure_root() {
